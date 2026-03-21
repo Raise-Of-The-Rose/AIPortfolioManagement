@@ -13,6 +13,7 @@ numpy
 ta
 
 huggingface-hub
+openai
 requests
 python-dotenv
 greenlet

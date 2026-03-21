@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from datetime import timedelta
 import models, database, auth_utils
 from jose import JWTError, jwt
 
@@ -52,7 +53,10 @@ def register(user: UserRegister, db: Session = Depends(database.get_db)):
     db.commit()
     db.refresh(new_user)
     
-    access_token = auth_utils.create_access_token(data={"sub": new_user.username})
+    access_token = auth_utils.create_access_token(
+        data={"sub": new_user.username},
+        expires_delta=timedelta(minutes=auth_utils.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
@@ -64,7 +68,10 @@ def login(user: UserLogin, db: Session = Depends(database.get_db)):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = auth_utils.create_access_token(data={"sub": db_user.username})
+    access_token = auth_utils.create_access_token(
+        data={"sub": db_user.username},
+        expires_delta=timedelta(minutes=auth_utils.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me")

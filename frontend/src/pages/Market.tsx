@@ -108,7 +108,7 @@ export default function Market() {
                         {suggestions.map((s, idx) => (
                             <div 
                                 key={idx} 
-                                onClick={() => handleSelectSuggestion(s.symbol)}
+                                onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
                                 className="px-5 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex justify-between items-center transition-colors"
                             >
                                 <span className="font-bold text-gray-900 dark:text-white">{s.symbol}</span>

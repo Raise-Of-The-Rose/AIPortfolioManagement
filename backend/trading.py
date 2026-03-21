@@ -3,6 +3,19 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import models, database, auth, market_data
 from datetime import datetime
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+
+HF_TOKEN = os.getenv("HF_TOKEN")
+CHAT_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta:featherless-ai"
+
+openai_client = OpenAI(
+    base_url="https://router.huggingface.co/v1",
+    api_key=HF_TOKEN,
+) if HF_TOKEN else None
 
 router = APIRouter(prefix="/trade", tags=["trade"])
 
@@ -112,3 +125,45 @@ def get_portfolio(current_user: models.User = Depends(auth.get_current_user), db
         "total_equity": current_user.balance + total_value,
         "holdings": results
     }
+
+
+@router.get("/analyze-buy/{symbol}")
+def analyze_buy(
+    symbol: str,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    """AI-powered pre-trade analysis for a BUY action."""
+    symbol = symbol.upper()
+
+    if not openai_client:
+        return {"analysis": "AI Offline: Please set HF_TOKEN environment variable."}
+
+    current_price = market_data.get_current_price(symbol)
+    price_str = f"${current_price:.2f}" if current_price else "unknown"
+
+    # Get portfolio context
+    holdings = db.query(models.Holding).filter(models.Holding.user_id == current_user.id).all()
+    holdings_txt = ", ".join([f"{h.symbol}({h.quantity}@${h.avg_price:.2f})" for h in holdings]) or "none"
+
+    prompt = (
+        f"A user wants to BUY {symbol} at {price_str}. "
+        f"Their balance is ${current_user.balance:.2f} and current holdings are: {holdings_txt}. "
+        f"Give a concise 2-3 sentence recommendation: should they buy, hold off, or be cautious? "
+        f"Consider diversification and risk. Be direct and practical."
+    )
+
+    try:
+        completion = openai_client.chat.completions.create(
+            model=CHAT_MODEL_ID,
+            messages=[
+                {"role": "system", "content": "You are a concise financial advisor. Give brief, practical advice."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=120,
+            temperature=0.6,
+        )
+        analysis = completion.choices[0].message.content
+        return {"analysis": analysis}
+    except Exception as e:
+        return {"analysis": f"AI analysis unavailable: {str(e)[:100]}"}
